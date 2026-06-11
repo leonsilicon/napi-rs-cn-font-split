@@ -1,87 +1,68 @@
-# `@napi-rs/package-template`
+# napi-rs-cn-font-split
 
-![https://github.com/napi-rs/package-template/actions](https://github.com/napi-rs/package-template/workflows/CI/badge.svg)
+![CI](https://github.com/leonsilicon/napi-rs-cn-font-split/workflows/CI/badge.svg)
 
-> Template project for writing node packages with napi-rs.
+A [napi-rs](https://napi.rs) binding for [`cn-font-split`](https://github.com/KonghaYao/cn-font-split) — a
+font subsetter/splitter that breaks large CJK fonts into many small, unicode-range-keyed `woff2`
+chunks so the browser only downloads the glyphs a page actually renders.
 
-# Usage
+## Why this exists
 
-1. Click **Use this template**.
-2. **Clone** your project.
-3. Run `yarn install` to install dependencies.
-4. Run `yarn napi rename -n [@your-scope/package-name] -b [binary-name]` command under the project folder to rename your package.
+Upstream `cn-font-split` ships a JS-only npm package and downloads its native Rust binary from
+GitHub Releases at install/first-use time. That download isn't pinned to the package version,
+isn't integrity-checked, and isn't atomic — a partial download silently breaks `dlopen` later.
 
-## Install this test package
+This package wraps the same upstream Rust library with napi-rs instead, so the native binary is
+distributed the standard npm way: prebuilt per-platform `.node` addons published as
+`optionalDependencies`, version-locked to the JS package, integrity-hashed in your lockfile, and
+installed offline-cacheably. HarfBuzz is built from source and linked statically, so each addon is
+self-contained (no system `libharfbuzz` required).
+
+## Install
 
 ```bash
-yarn add @napi-rs/package-template
+npm install napi-rs-cn-font-split
 ```
 
-## Ability
+Prebuilt binaries are published for: macOS (arm64, x64), Linux gnu (arm64, x64), Windows msvc
+(arm64, x64).
 
-### Build
+## Usage
 
-After `yarn build/npm run build` command, you can see `package-template.[darwin|win32|linux].node` file in project root. This is the native addon built from [lib.rs](./src/lib.rs).
+The binding mirrors the upstream protobuf contract: pass a protobuf-encoded `InputTemplate`,
+receive each streamed `EventMessage` back as a protobuf-encoded `Buffer`, in emission order.
 
-### Test
+```ts
+import { fontSplit } from 'napi-rs-cn-font-split'
 
-With [ava](https://github.com/avajs/ava), run `yarn test/npm run test` to testing native addon. You can also switch to another testing framework if you want.
-
-### CI
-
-With GitHub Actions, each commit and pull request will be built and tested automatically in [`node@20`, `@node22`] x [`macOS`, `Linux`, `Windows`] matrix. You will never be afraid of the native addon broken in these platforms.
-
-### Release
-
-Release native package is very difficult in old days. Native packages may ask developers who use it to install `build toolchain` like `gcc/llvm`, `node-gyp` or something more.
-
-With `GitHub actions`, we can easily prebuild a `binary` for major platforms. And with `N-API`, we should never be afraid of **ABI Compatible**.
-
-The other problem is how to deliver prebuild `binary` to users. Downloading it in `postinstall` script is a common way that most packages do it right now. The problem with this solution is it introduced many other packages to download binary that has not been used by `runtime codes`. The other problem is some users may not easily download the binary from `GitHub/CDN` if they are behind a private network (But in most cases, they have a private NPM mirror).
-
-In this package, we choose a better way to solve this problem. We release different `npm packages` for different platforms. And add it to `optionalDependencies` before releasing the `Major` package to npm.
-
-`NPM` will choose which native package should download from `registry` automatically. You can see [npm](./npm) dir for details. And you can also run `yarn add @napi-rs/package-template` to see how it works.
-
-## Develop requirements
-
-- Install the latest `Rust`
-- Install `Node.js@10+` which fully supported `Node-API`
-- Install `yarn@1.x`
-
-## Test in local
-
-- yarn
-- yarn build
-- yarn test
-
-And you will see:
-
-```bash
-$ ava --verbose
-
-  ✔ sync function from native code
-  ✔ sleep function from native code (201ms)
-  ─
-
-  2 tests passed
-✨  Done in 1.12s.
+// `input` is a protobuf-encoded cn-font InputTemplate (field 1 = the ttf/woff2 bytes).
+const events: Buffer[] = fontSplit(input)
+// Decode each Buffer as an EventMessage. OUTPUT_DATA events carry { message: filename, data }
+// for each woff2 chunk / css / reporter; the final event is END.
 ```
 
-## Release package
+See `__test__/index.spec.ts` for a minimal hand-rolled encode/decode example.
 
-Ensure you have set your **NPM_TOKEN** in the `GitHub` project setting.
-
-In `Settings -> Secrets`, add **NPM_TOKEN** into it.
-
-When you want to release the package:
+## Development
 
 ```bash
-npm version [<newversion> | major | minor | patch | premajor | preminor | prepatch | prerelease [--preid=<prerelease-id>] | from-git]
+yarn install
+yarn build        # builds the .node addon (compiles bundled HarfBuzz on first run)
+yarn test         # ava
+yarn lint         # oxlint
+```
 
+The upstream Rust crates are pinned to a specific git rev in `Cargo.toml`. `HARFBUZZ_SYS_NO_PKG_CONFIG`
+is set in `.cargo/config.toml` so local builds bundle HarfBuzz the same way CI does.
+
+### Releasing
+
+CI publishes to npm when the latest commit message is a bare semver (e.g. `1.0.0`):
+
+```bash
+yarn version          # bumps version, runs `napi version`
+git commit -am "1.0.0"
 git push
 ```
 
-GitHub actions will do the rest job for you.
-
-> WARN: Don't run `npm publish` manually.
+Requires an `NPM_TOKEN` repository secret.

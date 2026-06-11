@@ -14,9 +14,11 @@ napi-derive = "3.0.0"
 prost = "0.13"
 # Thin napi wrapper around the upstream cn-font-split Rust library. We depend on it (and its
 # proto crate) as a library — NOT the bin — so we link our own self-contained .node addon.
-# Path deps for local iteration; switch to a pinned `git`/`rev` before publishing.
-cn-font-split = { path = "../cn-font-split", default-features = false, features = ["with_extra"] }
-cn-font-proto = { path = "../cn-font-split/crates/proto", default-features = false, features = ["with_extra"] }
+# Pinned to a specific upstream rev so CI/publish builds are reproducible. Both deps point at
+# the same repo+rev; Cargo resolves the upstream workspace and locates each crate by package
+# name (`cn-font-split` is the repo root, `cn-font-proto` lives at `crates/proto`).
+cn-font-split = { git = "https://github.com/KonghaYao/cn-font-split", rev = "384c0e62a9c9b636cce0bc2a02f7b13345a0cc19", default-features = false, features = ["with_extra"] }
+cn-font-proto = { git = "https://github.com/KonghaYao/cn-font-split", rev = "384c0e62a9c9b636cce0bc2a02f7b13345a0cc19", default-features = false, features = ["with_extra"] }
 
 [build-dependencies]
 napi-build = "2"

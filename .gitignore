@@ -117,7 +117,9 @@ dist
 #Added by cargo
 
 /target
-Cargo.lock
+
+# Cargo.lock IS committed: this crate pins cn-font-split to a git rev, and the lockfile is what
+# makes the full transitive dependency set reproducible across CI runners and publish.
 
 *.node
 .pnp.*

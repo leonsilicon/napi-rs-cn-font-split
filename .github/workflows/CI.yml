@@ -4,6 +4,11 @@ env:
   APP_NAME: napi-rs-cn-font-split
   MACOSX_DEPLOYMENT_TARGET: '10.13'
   CARGO_INCREMENTAL: '1'
+  # Build HarfBuzz from bundled source and link it statically (via harfbuzz-sys, pulled in
+  # transitively through cn-font-split -> harfbuzz_rs_now) instead of probing the system with
+  # pkg-config. Keeps every produced .node addon self-contained. Mirrors upstream
+  # cn-font-split's release builds. Also set in .cargo/config.toml for local builds.
+  HARFBUZZ_SYS_NO_PKG_CONFIG: 'True'
 'on':
   push:
     branches:
@@ -35,6 +40,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # HarfBuzz-from-source needs a C/C++ toolchain + cmake even just to `cargo clippy`,
+      # because the transitive harfbuzz-sys build script compiles native code.
+      - name: Install HarfBuzz build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y cmake clang llvm pkg-config
       - name: Install dependencies
         run: yarn install
       - name: Oxlint
@@ -48,31 +57,30 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-latest
-            target: x86_64-apple-darwin
-            build: yarn build --target x86_64-apple-darwin
-          - host: windows-latest
-            build: yarn build --target x86_64-pc-windows-msvc
-            target: x86_64-pc-windows-msvc
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            build: yarn build --target x86_64-unknown-linux-gnu --use-napi-cross
+          # Native runners only. The HarfBuzz dependency is built from C/C++ source, which does
+          # not cross-compile cleanly via zig/napi-cross, so each target builds on its own host
+          # arch (linux-arm64 uses an arm GitHub runner rather than cross-compiling).
           - host: macos-latest
             target: aarch64-apple-darwin
             build: yarn build --target aarch64-apple-darwin
+          - host: macos-13
+            target: x86_64-apple-darwin
+            build: yarn build --target x86_64-apple-darwin
           - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build: yarn build --target x86_64-unknown-linux-gnu
+            setup: sudo apt-get update && sudo apt-get install -y cmake clang llvm pkg-config
+          - host: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            build: yarn build --target aarch64-unknown-linux-gnu --use-napi-cross
-          - host: ubuntu-latest
-            target: aarch64-linux-android
-            build: yarn build --target aarch64-linux-android
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            build: yarn build --target aarch64-unknown-linux-musl -x
+            build: yarn build --target aarch64-unknown-linux-gnu
+            setup: sudo apt-get update && sudo apt-get install -y cmake clang llvm pkg-config
           - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: yarn build --target x86_64-pc-windows-msvc
+          - host: windows-11-arm
             target: aarch64-pc-windows-msvc
             build: yarn build --target aarch64-pc-windows-msvc
-    name: stable - ${{ matrix.settings.target }} - node@22
+    name: stable - ${{ matrix.settings.target }} - node@24
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v6
@@ -86,6 +94,8 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
+      # cmake is required by harfbuzz-sys to build the bundled HarfBuzz. macOS runners ship it;
+      # Windows runners ship cmake + MSVC. Linux needs it installed (done in `setup`).
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -97,17 +107,6 @@ jobs:
             .cargo-cache
             target/
           key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
-      - uses: mlugg/setup-zig@v2
-        if: ${{ contains(matrix.settings.target, 'musl') }}
-        with:
-          version: 0.14.1
-      - name: Install cargo-zigbuild
-        uses: taiki-e/install-action@v2
-        if: ${{ contains(matrix.settings.target, 'musl') }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          tool: cargo-zigbuild
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
@@ -121,30 +120,34 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: |
-            ${{ env.APP_NAME }}.*.node
-            ${{ env.APP_NAME }}.*.wasm
+          path: ${{ env.APP_NAME }}.*.node
           if-no-files-found: error
-  test-macOS-windows-binding:
-    name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
+  test-binding:
+    name: Test ${{ matrix.settings.target }} - node@${{ matrix.node }}
     needs:
       - build
     strategy:
       fail-fast: false
       matrix:
         settings:
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            architecture: arm64
+          - host: macos-13
+            target: x86_64-apple-darwin
+            architecture: x64
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            architecture: x64
+          - host: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            architecture: arm64
           - host: windows-latest
             target: x86_64-pc-windows-msvc
             architecture: x64
           - host: windows-11-arm
             target: aarch64-pc-windows-msvc
             architecture: arm64
-          - host: macos-latest
-            target: aarch64-apple-darwin
-            architecture: arm64
-          - host: macos-latest
-            target: x86_64-apple-darwin
-            architecture: x64
         node:
           - '22'
           - '24'
@@ -169,77 +172,6 @@ jobs:
         shell: bash
       - name: Test bindings
         run: yarn test
-  test-linux-binding:
-    name: Test ${{ matrix.target }} - node@${{ matrix.node }}
-    needs:
-      - build
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl
-        node:
-          - '22'
-          - '24'
-        exclude:
-          - target: armv7-unknown-linux-gnueabihf
-            node: '24'
-    runs-on: ${{ contains(matrix.target, 'aarch64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@v6
-      - name: Setup node
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node }}
-          cache: yarn
-      - name: Output docker params
-        id: docker
-        run: |
-          node -e "
-            if ('${{ matrix.target }}'.startsWith('aarch64')) {
-              console.log('PLATFORM=linux/arm64')
-            } else if ('${{ matrix.target }}'.startsWith('armv7')) {
-              console.log('PLATFORM=linux/arm/v7')
-            } else {
-              console.log('PLATFORM=linux/amd64')
-            }
-          " >> $GITHUB_OUTPUT
-          node -e "
-            if ('${{ matrix.target }}'.endsWith('-musl')) {
-              console.log('IMAGE=node:${{ matrix.node }}-alpine')
-            } else {
-              console.log('IMAGE=node:${{ matrix.node }}-slim')
-            }
-          " >> $GITHUB_OUTPUT
-      - name: Install dependencies
-        run: |
-          yarn config set --json supportedArchitectures.cpu '["current", "arm64", "x64", "arm"]'
-          yarn config set --json supportedArchitectures.libc '["current", "musl", "gnu"]'
-          yarn install
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: bindings-${{ matrix.target }}
-          path: .
-      - name: List packages
-        run: ls -R .
-        shell: bash
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-        if: ${{ contains(matrix.target, 'armv7') }}
-        with:
-          platforms: all
-      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-        if: ${{ contains(matrix.target, 'armv7') }}
-      - name: Test bindings
-        uses: tj-actions/docker-run@v2
-        with:
-          image: ${{ steps.docker.outputs.IMAGE }}
-          name: test-bindings-${{ matrix.target }}
-          options: '-v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} --platform ${{ steps.docker.outputs.PLATFORM }}'
-          args: yarn test
   publish:
     name: Publish
     runs-on: ubuntu-latest
@@ -248,8 +180,7 @@ jobs:
       id-token: write
     needs:
       - lint
-      - test-macOS-windows-binding
-      - test-linux-binding
+      - test-binding
     steps:
       - uses: actions/checkout@v6
       - name: Setup node
