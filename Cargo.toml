@@ -1,0 +1,26 @@
+
+[package]
+authors = ["Leon Si <leon@leonsilicon.com>"]
+edition = "2021"
+name = "napi_rs_cn_font_split"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3.0.0", default-features = false, features = ["napi4"] }
+napi-derive = "3.0.0"
+prost = "0.13"
+# Thin napi wrapper around the upstream cn-font-split Rust library. We depend on it (and its
+# proto crate) as a library — NOT the bin — so we link our own self-contained .node addon.
+# Path deps for local iteration; switch to a pinned `git`/`rev` before publishing.
+cn-font-split = { path = "../cn-font-split", default-features = false, features = ["with_extra"] }
+cn-font-proto = { path = "../cn-font-split/crates/proto", default-features = false, features = ["with_extra"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"

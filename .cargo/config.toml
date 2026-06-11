@@ -1,0 +1,11 @@
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# Build HarfBuzz from bundled source and link it statically (via harfbuzz-sys, pulled in
+# transitively through cn-font-split → harfbuzz_rs_now) instead of probing the system with
+# pkg-config. Applied to ALL build scripts (Cargo `[env]` propagates to dependency build
+# scripts, unlike setting it inside our own build.rs), so the produced .node addon is
+# self-contained and needs no system libharfbuzz/libharfbuzz-subset at build or run time.
+# Mirrors upstream cn-font-split's release builds (HARFBUZZ_SYS_NO_PKG_CONFIG=True).
+[env]
+HARFBUZZ_SYS_NO_PKG_CONFIG = "True"
