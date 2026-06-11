@@ -40,6 +40,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # cn-font-proto's build.rs runs prost-build, which shells out to `protoc`.
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       # HarfBuzz-from-source needs a C/C++ toolchain + cmake even just to `cargo clippy`,
       # because the transitive harfbuzz-sys build script compiles native code.
       - name: Install HarfBuzz build prerequisites
@@ -94,6 +99,11 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
+      # cn-font-proto's build.rs runs prost-build, which shells out to `protoc`.
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       # cmake is required by harfbuzz-sys to build the bundled HarfBuzz. macOS runners ship it;
       # Windows runners ship cmake + MSVC. Linux needs it installed (done in `setup`).
       - name: Cache cargo
