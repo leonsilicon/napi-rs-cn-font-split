@@ -127,12 +127,5 @@
       "require": "./dist/index.cjs",
       "default": "./dist/index.cjs"
     }
-  },
-  "optionalDependencies": {
-    "napi-rs-cn-font-split-darwin-arm64": "1.0.1",
-    "napi-rs-cn-font-split-linux-x64-gnu": "1.0.1",
-    "napi-rs-cn-font-split-linux-arm64-gnu": "1.0.1",
-    "napi-rs-cn-font-split-win32-x64-msvc": "1.0.1",
-    "napi-rs-cn-font-split-win32-arm64-msvc": "1.0.1"
   }
 }
