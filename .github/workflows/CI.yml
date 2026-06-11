@@ -67,21 +67,21 @@ jobs:
           # arch (linux-arm64 uses an arm GitHub runner rather than cross-compiling).
           - host: macos-latest
             target: aarch64-apple-darwin
-            build: yarn build --target aarch64-apple-darwin
+            build: yarn build:napi --target aarch64-apple-darwin
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            build: yarn build --target x86_64-unknown-linux-gnu
+            build: yarn build:napi --target x86_64-unknown-linux-gnu
             setup: sudo apt-get update && sudo apt-get install -y cmake clang llvm pkg-config
           - host: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            build: yarn build --target aarch64-unknown-linux-gnu
+            build: yarn build:napi --target aarch64-unknown-linux-gnu
             setup: sudo apt-get update && sudo apt-get install -y cmake clang llvm pkg-config
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-            build: yarn build --target x86_64-pc-windows-msvc
+            build: yarn build:napi --target x86_64-pc-windows-msvc
           - host: windows-11-arm
             target: aarch64-pc-windows-msvc
-            build: yarn build --target aarch64-pc-windows-msvc
+            build: yarn build:napi --target aarch64-pc-windows-msvc
     name: stable - ${{ matrix.settings.target }} - node@24
     runs-on: ${{ matrix.settings.host }}
     steps:
@@ -127,7 +127,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: ${{ env.APP_NAME }}.*.node
+          # The per-platform .node plus the (platform-independent) generated JS loader, so the
+          # test/publish jobs can `yarn bundle` without re-running cargo.
+          path: |
+            dist/${{ env.APP_NAME }}.*.node
+            dist/napi.cjs
+            dist/napi.d.ts
           if-no-files-found: error
   test-binding:
     name: Test ${{ matrix.settings.target }} - node@${{ matrix.node }}
@@ -170,10 +175,13 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: .
+          path: dist
       - name: List packages
-        run: ls -R .
+        run: ls -R dist
         shell: bash
+      # Bundle the JS wrapper (tsdown, no cargo) against the downloaded .node + napi loader.
+      - name: Bundle
+        run: yarn bundle
       - name: Test bindings
         run: yarn test
   publish:
@@ -202,8 +210,18 @@ jobs:
           path: artifacts
       - name: Move artifacts
         run: yarn artifacts
+      # Build the main package's bundled entry (dist/index.cjs). `napi artifacts` distributes
+      # the .node files into the per-platform npm/ dirs but doesn't produce the main bundle, so
+      # we stage the generated JS loader from any one artifact and run `yarn bundle` (no cargo).
+      - name: Prepare dist + bundle
+        run: |
+          mkdir -p dist
+          cp artifacts/bindings-aarch64-apple-darwin/napi.cjs dist/napi.cjs
+          cp artifacts/bindings-aarch64-apple-darwin/napi.d.ts dist/napi.d.ts
+          yarn bundle
+        shell: bash
       - name: List packages
-        run: ls -R ./npm
+        run: ls -R ./npm && ls -R ./dist
         shell: bash
       - name: Publish
         run: |

@@ -1,8 +1,8 @@
 {
   "name": "napi-rs-cn-font-split",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "napi-rs binding for cn-font-split: subset/split CJK fonts into unicode-range woff2 chunks",
-  "main": "index.js",
+  "main": "dist/index.cjs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/leonsilicon/napi-rs-cn-font-split.git"
@@ -22,8 +22,10 @@
     "cn-font-split"
   ],
   "files": [
-    "index.d.ts",
-    "index.js"
+    "dist/index.cjs",
+    "dist/index.d.cts",
+    "dist/napi.cjs",
+    "dist/napi.d.ts"
   ],
   "napi": {
     "binaryName": "napi-rs-cn-font-split",
@@ -45,8 +47,8 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "bench": "node --import @oxc-node/core/register benchmark/bench.ts",
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
+    "build": "yarn build:napi && yarn bundle",
+    "build:debug": "yarn build:napi:debug && yarn bundle",
     "format": "run-p format:prettier format:rs format:toml",
     "format:prettier": "prettier . -w",
     "format:toml": "taplo format",
@@ -54,9 +56,12 @@
     "lint": "oxlint .",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
-    "preversion": "napi build --platform && git add .",
+    "preversion": "yarn build && git add .",
     "version": "napi version",
-    "prepare": "husky"
+    "prepare": "husky",
+    "build:napi": "napi build --platform --release -o dist --js napi.cjs --dts napi.d.ts",
+    "build:napi:debug": "napi build --platform -o dist --js napi.cjs --dts napi.d.ts",
+    "bundle": "tsdown"
   },
   "devDependencies": {
     "@emnapi/core": "^1.5.0",
@@ -67,12 +72,14 @@
     "@tybys/wasm-util": "^0.10.0",
     "ava": "^8.0.0",
     "chalk": "^5.6.2",
+    "cn-font-split": "^7.4.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.0",
     "npm-run-all2": "^8.0.4",
     "oxlint": "^1.14.0",
     "prettier": "^3.6.2",
     "tinybench": "^6.0.0",
+    "tsdown": "^0.22.2",
     "typescript": "^6.0.0"
   },
   "lint-staged": {
@@ -107,5 +114,18 @@
     "singleQuote": true,
     "arrowParens": "always"
   },
-  "packageManager": "yarn@4.14.1"
+  "packageManager": "yarn@4.14.1",
+  "dependenciesMeta": {
+    "cn-font-split": {
+      "built": false
+    }
+  },
+  "types": "dist/index.d.cts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.cts",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
+    }
+  }
 }
