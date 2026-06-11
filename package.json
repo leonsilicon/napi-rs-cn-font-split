@@ -1,12 +1,13 @@
 {
   "name": "napi-rs-cn-font-split",
   "version": "1.0.0",
-  "description": "Template project for writing node package with napi-rs",
+  "description": "napi-rs binding for cn-font-split: subset/split CJK fonts into unicode-range woff2 chunks",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/napi-rs/package-template.git"
+    "url": "git+https://github.com/leonsilicon/napi-rs-cn-font-split.git"
   },
+  "homepage": "https://github.com/leonsilicon/napi-rs-cn-font-split#readme",
   "license": "MIT",
   "keywords": [
     "napi-rs",
@@ -14,7 +15,11 @@
     "N-API",
     "Rust",
     "node-addon",
-    "node-addon-api"
+    "font",
+    "font-subset",
+    "woff2",
+    "cjk",
+    "cn-font-split"
   ],
   "files": [
     "index.d.ts",
